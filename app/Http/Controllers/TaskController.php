@@ -3,21 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\ApiController;
+use App\Http\Controllers\Responses\Responder;
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\ToggleTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Task;
+use App\Transformers\TaskTransformer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
-class TaskController extends ApiController
+class TaskController extends Controller
 {
     //
 
+    private $responder;
 
-    public function __construct()
+    public function __construct(Responder $responder)
     {
         $this->middleware('auth:api');
+        $this->responder=$responder;
 
     }
 
@@ -30,55 +34,47 @@ class TaskController extends ApiController
     {
         $tasks=new Task();
 
-        if ($tasks->user_id !=$request->user()->id) {
-             Task::where('user_id', $request->user()->id)->where('is_private', 0)->get();
+        if ($tasks->user_id !=$request->user()->id)
+        {
+             $tasks->where('user_id', $request->user()->id)->where('is_private', 0)->get();
         }
 
         $tasks->where('user_id',$request->user()->id)->get();
 
-        return $this->respondOK($tasks->toArray()) ;
+        $transformed=\Fractal::item($tasks,new TaskTransformer())->toArray();
+
+        return $this->responder->setStatus(200)->respond($transformed);
     }
 
 
     /**
      * Store a newly created resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
+     * @param  StoreTaskRequest  $request
      * @return \Illuminate\Http\Response
      */
     public function store(StoreTaskRequest $request)
     {
-        $input = $request->all();
+           $task=\Auth::user()->tasks()->create($request->all());
 
-        if(!$input){
-            return $this->respondNotAcceptable();
-        }
+           $transformed=\Fractal::item($task,new TaskTransformer())->toArray();
 
-        $input['user_id']=$request->user()->id;
-
-        $task = Task::create($input);
-
-        return $this->respondCreated($task->toArray());
+           return $this->responder->setStatus(201)->respond($transformed);
 
     }
 
     public function update(UpdateTaskRequest $request, Task $task)
     {
-            $input = $request->all();
 
         if ($task->user_id != $request->user()->id) {
-            return $this->respondNotAuthenticated();
+            return $this->responder->setStatus(401)->respondWithAuthenticationError();
         }
 
-        if (!$input) {
-            return $this->respondNotAcceptable();
-        }
+        $task->update($request->all());
 
+        $transformed=\Fractal::item($task,new TaskTransformer())->toArray();
 
-        $task->where('id', $task->id)->update($input);
-
-
-        return $this->respondOK($task->toArray());
+        return $this->responder->setStatus(200)->respond($transformed);
 
 
         }
@@ -86,33 +82,31 @@ class TaskController extends ApiController
 
     public function toggle(ToggleTaskRequest $request, Task $task)
     {
-
-        $input = $request->only('is_complete');
-
         if ($task->user_id != $request->user()->id) {
-            return $this->respondNotAuthenticated();
+            return $this->responder->setStatus(401)->respondWithAuthenticationError();
         }
 
-        if(!$input){
-            return $this->respondNotAcceptable();
-        }
+        $task->update($request->all());
 
-        $task->update($input);
+        $transformed=\Fractal::item($task,new TaskTransformer())->toArray();
 
-        return $this->respondOK($task->toArray());
+        return $this->responder->setStatus(200)->respond($transformed);
+
     }
 
 
     public function destroy(Task $task)
     {
 
-        if ($task->user_id != \Auth::user()->id) {
-            return $this->respondNotAuthenticated();
+        if ($task->user_id != \Auth::user()->id)
+        {
+            return $this->responder->setStatus(401)->respondWithAuthenticationError();
+
         }
 
         $task->delete();
 
-         return $this->respondOK($task->toArray());
+        return $this->responder->setStatus(200)->respond($task->toArray());
 
     }
 }

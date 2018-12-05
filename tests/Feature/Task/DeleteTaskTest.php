@@ -27,9 +27,17 @@ class DeleteTaskTest extends TestCase
 
         $task= factory(Task::class)->create(['user_id'=>$user_factory->id]);
 
+        $taskData=factory(Task::class)->make()->toArray();
+
         $response = $this->actingAs($user_factory)->hitDeleteTaskEndpoint($task);
 
         $response->assertStatus(200);
+
+        $this->assertDatabaseMissing('tasks',$taskData);
+
+        $response->assertJsonMissing($taskData);
+
+
 
     }
 
@@ -46,6 +54,10 @@ class DeleteTaskTest extends TestCase
 
         $response->assertStatus(401);
 
+        $response->assertJson(['errors'=>'Forbidden!']);
+
+
+
     }
 
 
@@ -57,6 +69,8 @@ class DeleteTaskTest extends TestCase
         $response = $this->hitDeleteTaskEndpoint($task);
 
         $response->assertStatus(401);
+
+        $response->assertJson(['errors'=>'Forbidden!']);
 
 
     }

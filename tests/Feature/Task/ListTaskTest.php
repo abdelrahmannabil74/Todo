@@ -3,6 +3,7 @@
 namespace Tests\Feature\Task;
 
 use App\Task;
+use App\Transformers\TaskTransformer;
 use App\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\TestResponse;
@@ -18,31 +19,52 @@ class ListTaskTest extends TestCase
         return $response;
     }
 
+    /**
+     * @param TestResponse $response
+     * @param Task $task
+     */
+
+    private function assertJsonResponseHasTask(TestResponse $response,Task $task)
+    {
+        $task->all()->last();
+
+        $response->assertJson(\Fractal::item($task, new TaskTransformer())->toArray());
+
+    }
+
+
     /**@test */
     function test_authenticated_user_can_view_tasks()
     {
         $this->actingAs(factory(User::class)->create());
 
-        $task=factory(Task::class)->make()->toArray();
+        $task=factory(Task::class)->create();
 
-        $response = $this->hitShowTaskEndpoint($task);
+        $taskData=factory(Task::class)->make()->toArray();
+
+        $response = $this->hitShowTaskEndpoint($taskData);
 
         $response->assertStatus(200);
 
+        $this->assertJsonResponseHasTask($response,$task);
     }
 
-    /**@tess */
-    function test_unauthenticated_user_can_view_public_tasks_from_other_users()
+    /**
+     * @test
+     */
+    function test_unauthorized_user_can_view_public_tasks_from_other_users()
     {
-        $user= factory(User::class)->create();
+        $this->actingAs(factory(User::class)->create());
 
-        $user_not_authorized= $this->actingAs(factory(User::class)->create());
+        $task=factory(Task::class)->create();
 
-        $task = factory(Task::class)->create(['user_id'=>$user->id]);
+        $taskData=factory(Task::class)->make()->toArray();
 
-        $response = $user_not_authorized->hitShowTaskEndpoint($task);
+        $response = $this->hitShowTaskEndpoint($taskData);
 
         $response->assertStatus(200);
+
+       $this->assertJsonResponseHasTask($response,$task);
 
     }
 
@@ -57,7 +79,8 @@ class ListTaskTest extends TestCase
 
         $response->assertStatus(401);
 
-    }
+        $response->assertJson(['errors'=>'Forbidden!']);
 
+    }
 
 }

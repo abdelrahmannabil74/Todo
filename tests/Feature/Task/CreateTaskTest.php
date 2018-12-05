@@ -3,6 +3,7 @@
 namespace Tests\Feature\Task;
 
 use App\Task;
+use App\Transformers\TaskTransformer;
 use App\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\TestResponse;
@@ -13,7 +14,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class CreateTaskTest extends TestCase
 {
-//    use DatabaseMigrations;
 
     /**
      * A data provider for the required fields in the store endpoint.
@@ -68,34 +68,46 @@ class CreateTaskTest extends TestCase
     }
 
     /**
-     * Asserts that task has been updated appropriately in the DB.
-     *
-     * @param $valuesUpdated
-     * @param $task
+     * @param TestResponse $response
+     * @param Task $task
      */
-    private function assertTaskUpdatedInDB($valuesUpdated, $task): void
+
+    private function assertJsonResponseHasTask(TestResponse $response,Task $task)
     {
-        foreach ($valuesUpdated as $key => $item) {
-            assertEquals($item, $task->fresh()->$key);
-        }
+        $task->all()->last();
+
+        $response->assertJson(\Fractal::item($task, new TaskTransformer())->toArray());
+
     }
 
 
-
-    /** @test */
+    /**
+     * @test
+    */
     function test_authenticated_user_can_create_task()
     {
-        $this->actingAs(factory(User::class)->create());
+        $user=factory(User::class)->create();
 
-        $task=factory(Task::class)->make()->toArray();
+        $this->actingAs($user);
 
-        $response = $this->hitCreateTaskEndpoint($task);
+        $task=factory(Task::class)->create();
+
+        $taskData=factory(Task::class)->make()->toArray();
+
+        $response = $this->hitCreateTaskEndpoint($taskData);
 
         $response->assertStatus(201);
 
+        $taskData['user_id'] = $user->id;
+
+        $this->assertDatabaseHas('tasks',$taskData);
+
+         $this->assertJsonResponseHasTask($response,$task);
     }
 
-    /**@test */
+    /**
+     * @test
+     */
     function test_guest_cant_create_task()
     {
 
@@ -105,38 +117,63 @@ class CreateTaskTest extends TestCase
 
         $response->assertStatus(401);
 
+        $response->assertJson(['errors'=>'Forbidden!']);
+
     }
 
-    /**@test
-     *  @dataProvider  requiredFields
+    /**
+     * @dataProvider  requiredFields
+     *
+     * @test
+     * @param $field
+     *
      */
-    function test_user_cant_create_task_without_required_fields()
+    function test_user_cant_create_task_without_required_fields($field)
     {
-        $this->actingAs(factory(User::class)->create());
 
-        factory(Task::class)->make()->toArray();
+        $user = factory(User::class)->create();
 
-        $response = $this->hitCreateTaskEndpoint([]);
+        $this->actingAs($user);
 
-        $response->assertStatus(406);
+        $taskData = factory(Task::class)->make()->toArray();
+
+        unset($taskData[$field]);
+
+        $response = $this->hitCreateTaskEndpoint($taskData);
+
+        $response->assertStatus(422);
+
+        $errors = $response->decodeResponseJson('errors');
+
+        $this->assertArrayHasKey($field, $errors);
+
     }
-
 
     /**
      * @dataProvider invalidFields
-     * @test */
+     * @test
+     * @param $field
+     * @param $value
+     */
     function test_user_cant_create_task_with_invalid_fields($field,$value)
     {
 
-        $user_factory=factory(User::class)->create();
+        $user = factory(User::class)->create();
+
+        $this->actingAs($user);
 
         $taskData = factory(Task::class)->make()->toArray();
 
         array_set($taskData,$field,$value);
 
-        $response = $this->actingAs($user_factory)->hitCreateTaskEndpoint($taskData);
+        $response = $this->hitCreateTaskEndpoint($taskData);
 
-        $response->assertStatus(406);
+        $response->assertStatus(422);
+
+        $errors = $response->decodeResponseJson('errors');
+
+        $this->assertArrayHasKey($field, $errors);
+
     }
 
 

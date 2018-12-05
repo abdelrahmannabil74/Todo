@@ -3,6 +3,7 @@
 namespace Tests\Feature\Task;
 
 use App\Task;
+use App\Transformers\TaskTransformer;
 use App\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\TestResponse;
@@ -71,22 +72,16 @@ class UpdateTaskTest extends TestCase
 
 
     /**
-     * Asserts Json response has the updated decision and with the appropriate relations.
-     *
      * @param TestResponse $response
      * @param Task $task
      */
-    private function assertJsonResponseHasTask(TestResponse $response, Task $task,User $user): void
+
+    private function assertJsonResponseHasTask(TestResponse $response,Task $task)
     {
-        $response->assertJson(['success'=>true,'data'=>[
-            'id'=>$task->id,
-            'user_id'=>$user->id,
-            'title'=>$task->title,
-            'deadline'=>$task->deadline,
-            'is_complete'=>$task->is_complete,
-            'is_private'=>$task->is_private,
-            'file'=>$task->file,
-        ]]);
+        $task->all()->last();
+
+        $response->assertJson(\Fractal::item($task, new TaskTransformer())->toArray());
+
     }
 
 
@@ -95,19 +90,21 @@ class UpdateTaskTest extends TestCase
 
     public function test_authenticated_user_can_update_task()
     {
-        $user_factory=factory(User::class)->create();
+        $user=factory(User::class)->create();
 
-        $taskToBeUpdated = factory(Task::class)->create(['user_id'=>$user_factory->id]);
+        $this->actingAs($user);
+
+        $taskToBeUpdated = factory(Task::class)->create(['user_id'=>$user->id]);
 
         $taskData = factory(Task::class)->make()->toArray();
 
-        $response = $this->actingAs($user_factory)->hitUpdateTaskEndpoint($taskToBeUpdated, $taskData);
+        $response = $this->hitUpdateTaskEndpoint($taskToBeUpdated, $taskData);
 
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('tasks',$taskData);
 
-        $this->assertJsonResponseHasTask($response,$taskToBeUpdated,$user_factory);
+        $this->assertJsonResponseHasTask($response,$taskToBeUpdated);
     }
 
 
@@ -126,6 +123,7 @@ class UpdateTaskTest extends TestCase
 
         $response->assertStatus(401);
 
+        $response->assertJson(['errors'=>'Forbidden!']);
     }
 
 
@@ -140,6 +138,8 @@ class UpdateTaskTest extends TestCase
         $response = $this->hitUpdateTaskEndpoint($task, $taskData);
 
         $response->assertStatus(401);
+
+        $response->assertJson(['errors'=>'Forbidden!']);
 
     }
 //
@@ -161,7 +161,12 @@ class UpdateTaskTest extends TestCase
 
         $response = $this->actingAs($user_factory)->hitUpdateTaskEndpoint($taskToBeUpdated, $taskData);
 
-         $response->assertStatus(406);
+         $response->assertStatus(422);
+
+        $errors = $response->decodeResponseJson('errors');
+
+        $this->assertArrayHasKey($field, $errors);
+
     }
 
 
@@ -183,7 +188,12 @@ class UpdateTaskTest extends TestCase
 
         $response = $this->actingAs($user_factory)->hitUpdateTaskEndpoint($taskToBeUpdated, $taskData);
 
-        $response->assertStatus(406);
+        $response->assertStatus(422);
+
+        $errors = $response->decodeResponseJson('errors');
+
+        $this->assertArrayHasKey($field, $errors);
+
     }
 
 

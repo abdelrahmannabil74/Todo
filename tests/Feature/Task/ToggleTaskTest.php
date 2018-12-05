@@ -3,6 +3,7 @@
 namespace Tests\Feature\Task;
 
 use App\Task;
+use App\Transformers\TaskTransformer;
 use App\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\TestResponse;
@@ -53,36 +54,17 @@ class ToggleTaskTest extends TestCase
     }
 
     /**
-     * Asserts that task has been updated appropriately in the DB.
-     *
-     * @param $valuesUpdated
-     * @param $task
-     */
-    private function assertTaskToggledInDB($valuesUpdated, $task): void
-    {
-        foreach ($valuesUpdated as $key => $item) {
-            $this->assertEquals($item, $task->fresh()->$key);
-        }
-    }
-
-
-    /**
-     * Asserts Json response has the updated decision and with the appropriate relations.
-     *
      * @param TestResponse $response
      * @param Task $task
      */
-    private function assertJsonResponseHasTask(TestResponse $response, Task $task,User $user): void
+
+    private function assertJsonResponseHasTask(TestResponse $response,Task $task)
     {
-        $response->assertJson(['success'=>true,'data'=>[
-            'id'=>$task->id,
-            'user_id'=>$user->id,
-            'is_complete'=>$task->is_complete,
+        $task->all()->last();
 
+        $response->assertJson(\Fractal::item($task, new TaskTransformer())->toArray());
 
-        ]]);
     }
-
 
 
     /**@test */
@@ -103,7 +85,7 @@ class ToggleTaskTest extends TestCase
 
         $this->assertDatabaseHas('tasks',$taskToBeToggled->toArray());
 
-        $this->assertJsonResponseHasTask($response,$taskToBeToggled,$user_factory);
+        $this->assertJsonResponseHasTask($response,$taskToBeToggled);
 
     }
 
@@ -122,6 +104,9 @@ class ToggleTaskTest extends TestCase
 
         $response->assertStatus(401);
 
+        $response->assertJson(['errors'=>'Forbidden!']);
+
+
     }
 
     /**@test */
@@ -135,6 +120,8 @@ class ToggleTaskTest extends TestCase
         $response = $this->hitToggleTaskEndpoint($task, $taskData);
 
         $response->assertStatus(401);
+
+        $response->assertJson(['errors'=>'Forbidden!']);
 
     }
 
@@ -157,7 +144,12 @@ class ToggleTaskTest extends TestCase
 
         $response = $this->actingAs($user_factory)->hitToggleTaskEndpoint($taskToBeToggled, $taskData);
 
-        $response->assertStatus(406);
+        $response->assertStatus(422);
+
+        $errors = $response->decodeResponseJson('errors');
+
+        $this->assertArrayHasKey($field, $errors);
+
 
     }
 
@@ -180,10 +172,13 @@ class ToggleTaskTest extends TestCase
 
         $response = $this->actingAs($user_factory)->hitToggleTaskEndpoint($taskToBeUpdated, $taskData);
 
-        $response->assertStatus(406);
+        $response->assertStatus(422);
+
+        $errors = $response->decodeResponseJson('errors');
+
+        $this->assertArrayHasKey($field, $errors);
+
     }
-
-
 
 
 }
