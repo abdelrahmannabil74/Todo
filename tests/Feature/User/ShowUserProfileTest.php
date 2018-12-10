@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\User;
 
+use App\Transformers\UserTransformer;
 use App\User;
 use Illuminate\Foundation\Testing\TestResponse;
 use Tests\TestCase;
@@ -21,13 +22,32 @@ class ShowUserProfileTest extends TestCase
 
     function test_authenticated_user_can_view_his_profile()
     {
-        $user_factory=factory(User::class)->create();
+        $user=factory(User::class)->create();
 
-        $response = $this->actingAs($user_factory)->hitShowProfileEndpoint($user_factory);
+        $this->actingAs($user);
+
+        $response = $this->hitShowProfileEndpoint($user);
 
         $response->assertStatus(200);
 
+        $user->all()->last();
+
+        $response->assertJson(\Fractal::item($user, new UserTransformer())->toArray());
+
     }
 
+
+    function test_guest_cant_view_his_profile()
+    {
+        $user=factory(User::class)->create();
+
+        $response = $this->hitShowProfileEndpoint($user);
+
+        $response->assertStatus(401);
+
+        $response->assertJson(['errors'=>'Forbidden!']);
+
+
+    }
 
 }

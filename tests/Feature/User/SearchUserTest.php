@@ -17,15 +17,22 @@ class SearchUserTest extends TestCase
     }
 
 
- /** @test*/
- function test_a_user_can_search_for_user()
- {
-    $user= factory(User::class)->create();
+     /**
+      * @test
+      */
+     function test_a_user_can_search_for_user()
+     {
+         $user= factory(User::class)->create();
 
-     $response = $this->hitSearchEndPoint($user);
+         $this->actingAs($user);
 
-     $response->assertStatus(200);
- }
+         $response = $this->hitSearchEndPoint($user);
+
+         $response->assertStatus(200);
+
+         $this->assertDatabaseHas('users',$user->toArray());
+
+     }
 
 
 }

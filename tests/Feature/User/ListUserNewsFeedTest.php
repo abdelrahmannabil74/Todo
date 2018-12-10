@@ -3,6 +3,7 @@
 namespace Tests\Feature\User;
 
 use App\Task;
+use App\Transformers\TaskTransformer;
 use App\User;
 use Illuminate\Foundation\Testing\TestResponse;
 use Tests\TestCase;
@@ -19,23 +20,34 @@ class ListUserNewsFeedTest extends TestCase
     }
 
 
-    /**@test*/
+    /**
+     * @test
+     */
     function test_authenticated_user_can_view_news_feed()
     {
         $user=factory(User::class)->create();
 
         $this->actingAs($user);
 
-        $task=factory(Task::class)->make()->toArray();
+//        $task=factory(Task::class)->create();
+
+        $task=Task::where('user_id',\Auth::user()->id);
+
+        $task=$task->orderBy('created_at','desc')->with('user')->get();
 
         $response=$this->hitShowNewsFeedEndpoint($task);
 
-
         $response->assertStatus(200);
+
+
+        $response->assertJson(\Fractal::includes('user')->collection($task,new TaskTransformer())->toArray());
+
     }
 
 
-    /** @test*/
+    /**
+     * @test
+     */
 
     function test_a_guest_cant_view_news_feed()
     {
@@ -46,6 +58,8 @@ class ListUserNewsFeedTest extends TestCase
         $response = $this->hitShowNewsFeedEndpoint($task);
 
         $response->assertStatus(401);
+
+        $response->assertJson(['errors'=>'Forbidden!']);
 
     }
 

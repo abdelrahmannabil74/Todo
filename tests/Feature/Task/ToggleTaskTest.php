@@ -60,7 +60,6 @@ class ToggleTaskTest extends TestCase
 
     private function assertJsonResponseHasTask(TestResponse $response,Task $task)
     {
-        $task->all()->last();
 
         $response->assertJson(\Fractal::item($task, new TaskTransformer())->toArray());
 
@@ -85,7 +84,7 @@ class ToggleTaskTest extends TestCase
 
         $this->assertDatabaseHas('tasks',$taskToBeToggled->toArray());
 
-        $this->assertJsonResponseHasTask($response,$taskToBeToggled);
+        $this->assertJsonResponseHasTask($response,$taskToBeToggled->fresh());
 
     }
 

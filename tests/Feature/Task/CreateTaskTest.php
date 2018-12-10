@@ -74,7 +74,6 @@ class CreateTaskTest extends TestCase
 
     private function assertJsonResponseHasTask(TestResponse $response,Task $task)
     {
-        $task->all()->last();
 
         $response->assertJson(\Fractal::item($task, new TaskTransformer())->toArray());
 
@@ -102,7 +101,7 @@ class CreateTaskTest extends TestCase
 
         $this->assertDatabaseHas('tasks',$taskData);
 
-         $this->assertJsonResponseHasTask($response,$task);
+         $this->assertJsonResponseHasTask($response,Task::all()->last());
     }
 
     /**

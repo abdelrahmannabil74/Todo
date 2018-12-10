@@ -5,31 +5,44 @@ namespace App\Http\Controllers;
 use App\Events\Reminder;
 use App\Events\TaskWatched;
 use App\Http\Controllers\ApiController;
+use App\Http\Controllers\Responses\Responder;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Task;
+use App\Transformers\TaskTransformer;
+use App\Transformers\UserTransformer;
 use App\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
-class UserController extends ApiController
+class UserController extends Controller
 {
     //
 
-    public function __construct()
+    private $responder;
+    public function __construct(Responder $responder)
     {
-//        $this->middleware('auth:api');
+
+        $this->middleware('auth:api');
+           $this->responder=$responder;
     }
 
     public function profile(User $user)
     {
-        if ($user) {
+        if (!$user)
+
+            return $this->responder->setStatus(404)->rerespondWithError();
+
+        else
+        {
             $user->first();
 
-            return $this->respondOK($user);
+            $transformed=\Fractal::item($user,new UserTransformer())->toArray();
+
+            return $this->responder->setStatus(200)->respond($transformed);
+
         }
-         else
-           return $this->respondNotFound();
+
     }
 
     public function newsFeed(Request $request)
@@ -37,18 +50,27 @@ class UserController extends ApiController
 
         $task=Task::where('user_id',$request->user()->id);
 
+
         if($request->input('status')){
             $task=$task->where('is_complete',$request->input('status'));
         }
+
         if($request->input('owner')){
             $task=$task->where('user_id',$request->input('owner'));
         }
+
         if($request->input('date')){
             $task=$task->whereDate('created_at',$request->input('date'));
         }
-        $task=$task->orderBy('created_at','desc')->with('user')->get()->toArray();
 
-        return $this->respondOK($task);
+        $task=$task->orderBy('created_at','desc')->with('user')->get();
+
+//        dd($task);
+
+        $transformed=\Fractal::includes('user')->collection($task,new TaskTransformer());
+
+        return $this->responder->setStatus(200)->respond($transformed);
+
     }
 
     public function search(Request $request)
@@ -61,10 +83,13 @@ class UserController extends ApiController
             $user=User::with('tasks')->where('name',  $request->input('user') )->first();
 
             if (!$user)
+
             {
-                return $this->respondNotFound();
+                return $this->responder->setStatus(404)->rerespondWithError();
+
             }
-            return $this->respondOK($user);
+
+            return $this->responder->setStatus(200)->respond($user);
 
         }
 
@@ -72,57 +97,67 @@ class UserController extends ApiController
 
     public function updateProfile(UpdateProfileRequest $request,User $user)
     {
-          $input=$request->only('info','avatar');
 
-        $validator = $request->validated();
-
-        if (!$validator)
+        if (!$request->all())
         {
-            return $this->respondNotAcceptable();
+            return $this->responder->setStatus(406)->respondWithError();
         }
 
         else
         {
-            $user->update($input);
+            $user->update($request->all());
 
-           return $this->respondOK($user->toArray());
+            $transformed=\Fractal::item($user,new UserTransformer())->toArray();
+
+           return $this->responder->setStatus(200)->respond($transformed);
         }
 
     }
 
     public function watch(Request $request,Task $task)
     {
-        if(!$task->is_private) {
+        if(!$task->is_private)
+        {
             $task->watching()->sync($request->user()->id);
             event(new TaskWatched($request->user()->id,$task));
         }
-        return $this->respondCreated($task->toArray());
+
+        return $this->responder->setStatus(201)->respond($task->toArray());
     }
 
 
     public function invite(Request $request,User $user,Task $task)
     {
         if($task->user_id=$request->user()->id)
-            $task->invitations()->sync($user->id);
-        return $this->respondCreated($task->toArray());
+
+        $task->invitations()->sync($user->id);
+
+        return $this->responder->setStatus(201)->respond($task->toArray());
     }
 
-    public function reminder(){
+    public function reminder()
+    {
         $tasks=Task::with('user')->whereDate('deadline',Carbon::tomorrow());
-        foreach ($tasks as $task){
+
+        foreach ($tasks as $task)
+        {
             event(new Reminder($task,$task->user));
         }
-        return $this->respondCreated();
+
+        return $this->responder->setStatus(201)->respond();
     }
 
-    public function accept(Request $request,Task $task){
+    public function accept(Request $request,Task $task)
+    {
         $task->invitations()->updateExistingPivot($request->user(), array('flag' => 1), false);
-        return $this->respondCreated();
-    }
 
-    public function reject(Request $request,Task $task){
+        return $this->responder->setStatus(201)->respond();    }
+
+    public function reject(Request $request,Task $task)
+    {
         $task->invitations()->updateExistingPivot($request->user(), array('flag' => 2), false);
-        return $this->respondCreated();
+
+        return $this->responder->setStatus(201)->respond();
     }
 
 

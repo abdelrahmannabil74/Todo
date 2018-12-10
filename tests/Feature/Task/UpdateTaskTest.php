@@ -104,7 +104,7 @@ class UpdateTaskTest extends TestCase
 
         $this->assertDatabaseHas('tasks',$taskData);
 
-        $this->assertJsonResponseHasTask($response,$taskToBeUpdated);
+        $this->assertJsonResponseHasTask($response,$taskToBeUpdated->fresh());
     }
 
 

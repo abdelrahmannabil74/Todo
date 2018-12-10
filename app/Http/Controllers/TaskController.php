@@ -9,8 +9,10 @@ use App\Http\Requests\ToggleTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Task;
 use App\Transformers\TaskTransformer;
+use App\Transformers\UserTransformer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use League\Fractal;
 
 class TaskController extends Controller
 {
@@ -30,20 +32,14 @@ class TaskController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index(Request $request)
+    public function index()
     {
-        $tasks=new Task();
+        $tasks=Task::where('user_id',\Auth::id())->orWhere('is_private',0)->get();
 
-        if ($tasks->user_id !=$request->user()->id)
-        {
-             $tasks->where('user_id', $request->user()->id)->where('is_private', 0)->get();
-        }
-
-        $tasks->where('user_id',$request->user()->id)->get();
-
-        $transformed=\Fractal::item($tasks,new TaskTransformer())->toArray();
+        $transformed=\Fractal::collection($tasks,new TaskTransformer())->toArray();
 
         return $this->responder->setStatus(200)->respond($transformed);
+
     }
 
 
@@ -57,7 +53,7 @@ class TaskController extends Controller
     {
            $task=\Auth::user()->tasks()->create($request->all());
 
-           $transformed=\Fractal::item($task,new TaskTransformer())->toArray();
+        $transformed=\Fractal::item($task,new TaskTransformer())->toArray();
 
            return $this->responder->setStatus(201)->respond($transformed);
 
